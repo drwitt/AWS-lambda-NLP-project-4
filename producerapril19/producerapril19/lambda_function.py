@@ -5,7 +5,7 @@ import json
 
 DYNAMODB = boto3.resource('dynamodb')
 TABLE = "covid-papers"
-QUEUE = "producer"
+QUEUE = "producer2"
 SQS = boto3.client("sqs")
 
 #SETUP LOGGING

@@ -3,7 +3,7 @@ import json
 import boto3
 import botocore
 import pandas as pd
-from io import StringIO
+import s3fs
 
 #SETUP LOGGING
 import logging
@@ -18,6 +18,9 @@ LOG.addHandler(logHandler)
 
 #S3 BUCKET
 REGION = "us-east-2"
+
+s3 = boto3.resource('s3')
+bucket_out_nm = 'final-entity-covid'
 
 ### SQS Utils###
 def sqs_queue_resource(queue_name):
@@ -84,7 +87,11 @@ def delete_sqs_msg(queue_name, receipt_handle):
     delete_log_msg_resp = "Response from delete from queue: %s" % response
     LOG.info(delete_log_msg_resp)
     return response
-
+    
+def jsonifize(paper_id, title, entities):
+    return {"paper_id": paper_id,
+            "title": title,
+            "entities": entities}, '{}_cleaned.json'.format(paper_id)
 
 def lambda_handler(event, context):
     """Entry Point for Lambda"""
@@ -93,9 +100,12 @@ def lambda_handler(event, context):
     receipt_handle  = event['Records'][0]['receiptHandle'] #sqs message
     #'eventSourceARN': 'arn:aws:sqs:us-east-1:561744971673:producer'
     event_source_arn = event['Records'][0]['eventSourceARN']
+    
+    
     for record in event['Records']:
         body = json.loads(record['body'])
         paper_id = body['paper_id']
+        title = body['title']
         extra_logging = {"body": body, "paper_id": paper_id}
         LOG.info(f"SQS CONSUMER LAMBDA, splitting sqs arn with value: {event_source_arn}",extra=extra_logging)
         qname = event_source_arn.split(":")[-1]
@@ -103,5 +113,14 @@ def lambda_handler(event, context):
         LOG.info(f"Attemping Deleting SQS receiptHandle {receipt_handle} with queue_name {qname}", extra=extra_logging)
         res = delete_sqs_msg(queue_name=qname, receipt_handle=receipt_handle)
         LOG.info(f"Deleted SQS receipt_handle {receipt_handle} with res {res}", extra=extra_logging)
+        
+        # Process Entity
+        client = boto3.client(service_name='comprehendmedical', region_name= REGION)
+        result = client.detect_entities(Text= title)
+        entities = result['Entities']
+        
+        # Save to s3 end collection bucket
+        content, fname = jsonifize(paper_id, title, entities)
+        s3.Object(bucket_out_nm, fname).put(Body= json.dumps(content))
         
     
