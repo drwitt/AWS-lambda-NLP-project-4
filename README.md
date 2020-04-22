@@ -25,6 +25,7 @@ Upload original json article files to AWS S3 bucket.
 Run scripts to extract desired features ('paper_id', 'title', 'abstract', etc.) from native json files, save in simplified json format, and upload to DynamoDB.
 
 $ python ./s3_parse_json.py
+
 $ python ./s3toDynamoDB.py 
 
 ### 6) 
